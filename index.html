@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>DoneDay</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2b4cff">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DoneDay">
+<style>
+/* Layout concept: one phone column. Large page title on top, one view at a time, a fixed bottom tab bar (Today, Habits, Focus, Backup). System fonts only, so the app loads offline. */
+:root {
+  --bg: #f2f4fa;
+  --surface: #ffffff;
+  --ink: #121830;
+  --muted: #5b6480;
+  --line: #dde2f0;
+  --accent: #2b4cff;
+  --accent-ink: #ffffff;
+  --gold-soft: #ffefc2;
+  --gold-ink: #6b4600;
+  --good: #14804f;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0f1d; --surface: #141a2d; --ink: #e9ecf8; --muted: #9aa4c4; --line: #263050;
+    --accent: #8aa0ff; --accent-ink: #0b1030; --gold-soft: #3b2f0c; --gold-ink: #ffd877; --good: #4cd08e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0f1d; --surface: #141a2d; --ink: #e9ecf8; --muted: #9aa4c4; --line: #263050;
+  --accent: #8aa0ff; --accent-ink: #0b1030; --gold-soft: #3b2f0c; --gold-ink: #ffd877; --good: #4cd08e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.45; -webkit-tap-highlight-color: transparent; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.app { max-width: 520px; margin-inline: auto; padding-inline: 16px; padding-top: max(20px, env(safe-area-inset-top, 0px)); padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+.top { padding-block: 8px 16px; }
+.date { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 2px 0 0; font-size: 38px; line-height: 1.05; font-weight: 800; letter-spacing: -0.02em; }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 14px; }
+.stat { padding: 12px 8px; text-align: center; min-width: 0; }
+.stat + .stat { border-left: 1px solid var(--line); }
+.stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--muted); }
+
+.add { display: flex; gap: 8px; margin-bottom: 14px; }
+.add input[type="text"] { flex: 1; min-width: 0; min-height: 48px; padding-inline: 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.add input::placeholder { color: var(--muted); }
+.btn { min-height: 48px; padding-inline: 18px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.ghost { min-height: 44px; padding-inline: 14px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-weight: 600; }
+.ghost.armed { border-color: var(--gold-ink); color: var(--gold-ink); background: var(--gold-soft); }
+
+.list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.item { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 6px 6px 6px 6px; min-height: 60px; }
+.check { width: 44px; height: 44px; border-radius: 12px; border: 0; background: transparent; display: grid; place-content: center; }
+.check::before { content: ""; width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--muted); display: block; }
+.check[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 5px var(--accent); }
+.check[aria-pressed="true"]::after { content: ""; position: absolute; width: 12px; height: 7px; border-left: 3px solid var(--accent-ink); border-bottom: 3px solid var(--accent-ink); transform: rotate(-45deg) translate(1px, -1px); }
+.check { position: relative; }
+.txt { min-width: 0; overflow-wrap: anywhere; }
+.done .txt { color: var(--muted); text-decoration: line-through; }
+.del { width: 44px; height: 44px; border: 0; background: transparent; color: var(--muted); font-size: 24px; border-radius: 10px; }
+.empty { color: var(--muted); margin: 6px 4px 16px; }
+
+.habit { grid-template-columns: 44px 1fr auto; }
+.habit .mid { min-width: 0; display: grid; gap: 4px; padding-block: 4px; }
+.habit .name { overflow-wrap: anywhere; font-weight: 600; }
+.dots { display: flex; gap: 5px; }
+.dots i { width: 14px; height: 14px; border-radius: 4px; background: var(--line); display: block; }
+.dots i.on { background: var(--accent); }
+.dots i.today { outline: 2px solid var(--muted); outline-offset: 1px; }
+.streak { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: var(--gold-soft); color: var(--gold-ink); white-space: nowrap; }
+.habit .right { display: flex; align-items: center; gap: 2px; }
+
+.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 5px; }
+.mode { min-height: 44px; border: 0; border-radius: 10px; background: transparent; font-weight: 600; color: var(--muted); }
+.mode[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.dial { position: relative; width: min(78vw, 300px); aspect-ratio: 1; margin: 24px auto 16px; }
+.dial svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
+.dial circle { fill: none; stroke-width: 10; }
+.dial .track { stroke: var(--line); }
+.dial .prog { stroke: var(--accent); stroke-linecap: round; }
+.clock { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.clock b { font-size: 58px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+.clock span { font-size: 14px; color: var(--muted); margin-top: 6px; }
+.row { display: flex; gap: 10px; justify-content: center; }
+.row .btn { min-width: 130px; }
+.msg { text-align: center; color: var(--muted); min-height: 24px; margin: 14px 0 0; }
+.today-focus { text-align: center; margin-top: 18px; color: var(--muted); font-size: 14px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; margin-bottom: 14px; }
+.card h2 { margin: 0; font-size: 18px; }
+.card p { margin: 0; color: var(--muted); }
+.card .row { justify-content: flex-start; flex-wrap: wrap; }
+.file-btn { display: inline-grid; place-content: center; }
+
+.tabs { position: fixed; inset-inline: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.tab { border: 0; background: transparent; min-height: 64px; display: grid; place-content: center; justify-items: center; gap: 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.tab svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tab[aria-current="page"] { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <p class="date" id="dateLine"></p>
+    <h1 id="viewTitle">Today</h1>
+  </header>
+
+  <main>
+    <section id="view-today">
+      <div class="stats" id="stats"></div>
+      <form class="add" id="taskForm" autocomplete="off">
+        <label class="sr" for="taskInput">New task</label>
+        <input id="taskInput" type="text" maxlength="120" placeholder="What is the one thing to finish today?" enterkeyhint="done">
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <ul class="list" id="taskList"></ul>
+      <p class="empty" id="taskEmpty" hidden>No tasks yet. Add the one task that matters most today, then do it first.</p>
+      <button class="ghost" type="button" id="clearDone" hidden>Clear completed</button>
+    </section>
+
+    <section id="view-habits" hidden>
+      <form class="add" id="habitForm" autocomplete="off">
+        <label class="sr" for="habitInput">New habit</label>
+        <input id="habitInput" type="text" maxlength="60" placeholder="A habit you can do in 2 minutes" enterkeyhint="done">
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <ul class="list" id="habitList"></ul>
+      <p class="empty" id="habitEmpty" hidden>No habits yet. Start with one small habit, like reading 1 page or drinking a glass of water.</p>
+    </section>
+
+    <section id="view-focus" hidden>
+      <div class="modes" role="group" aria-label="Timer mode">
+        <button class="mode" type="button" data-mode="focus">Focus 25</button>
+        <button class="mode" type="button" data-mode="short">Break 5</button>
+        <button class="mode" type="button" data-mode="long">Long 15</button>
+      </div>
+      <div class="dial">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="track" cx="100" cy="100" r="88"></circle>
+          <circle class="prog" id="prog" cx="100" cy="100" r="88"></circle>
+        </svg>
+        <div class="clock"><b id="clock">25:00</b><span id="clockLabel">Focus</span></div>
+      </div>
+      <div class="row">
+        <button class="btn" type="button" id="startBtn">Start</button>
+        <button class="ghost" type="button" id="resetBtn">Reset</button>
+      </div>
+      <p class="msg" id="focusMsg" aria-live="polite"></p>
+      <p class="today-focus" id="todayFocus"></p>
+    </section>
+
+    <section id="view-data" hidden>
+      <div class="card">
+        <h2>Your data stays on this phone</h2>
+        <p>Nothing is sent to any server. Save a backup file now and then, so you do not lose your tasks and habits if you clear your browser data or change phone.</p>
+        <div class="row">
+          <button class="btn" type="button" id="exportBtn">Save backup</button>
+          <label class="btn file-btn" for="importFile" tabindex="0" id="importLabel">Load backup</label>
+          <input class="sr" type="file" id="importFile" accept="application/json,.json">
+        </div>
+        <p id="dataMsg" aria-live="polite"></p>
+      </div>
+      <div class="card">
+        <h2>Start fresh</h2>
+        <p>This deletes all tasks, habits and focus history on this phone.</p>
+        <div class="row"><button class="ghost" type="button" id="wipeBtn">Delete all data</button></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Main">
+    <button class="tab" type="button" data-view="today"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.7 2.7L16 9.8"></path></svg>Today</button>
+    <button class="tab" type="button" data-view="habits"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"></rect><path d="M8 12h8M12 8v8"></path></svg>Habits</button>
+    <button class="tab" type="button" data-view="focus"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 2M9.5 3h5"></path></svg>Focus</button>
+    <button class="tab" type="button" data-view="data"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 20h14"></path></svg>Backup</button>
+  </nav>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = "doneday-v1";
+  var DUR = { focus: 25, short: 5, long: 15 };
+  var LABEL = { focus: "Focus", short: "Short break", long: "Long break" };
+  var TITLES = { today: "Today", habits: "Habits", focus: "Focus", data: "Backup" };
+  var CIRC = 2 * Math.PI * 88;
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls) { var e = document.createElement(tag); if (cls) e.className = cls; return e; }
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function dayKey(d) { d = d || new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function daysAgo(n) { var d = new Date(); d.setDate(d.getDate() - n); return dayKey(d); }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  function norm(s) {
+    s = s && typeof s === "object" ? s : {};
+    return {
+      tasks: Array.isArray(s.tasks) ? s.tasks : [],
+      habits: Array.isArray(s.habits) ? s.habits : [],
+      focus: s.focus && typeof s.focus === "object" ? s.focus : {},
+      timer: s.timer && typeof s.timer === "object" && DUR[s.timer.mode] ? s.timer : null
+    };
+  }
+  function load() {
+    try { var raw = localStorage.getItem(KEY); if (raw) return norm(JSON.parse(raw)); } catch (e) {}
+    return norm({});
+  }
+  var state = load();
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  /* ---------- Today ---------- */
+  function renderTasks() {
+    var ul = $("taskList");
+    ul.textContent = "";
+    var open = state.tasks.filter(function (t) { return !t.done; });
+    var done = state.tasks.filter(function (t) { return t.done; });
+    open.concat(done).forEach(function (t) {
+      var li = el("li", "item" + (t.done ? " done" : ""));
+      var b = el("button", "check");
+      b.type = "button";
+      b.setAttribute("aria-pressed", t.done ? "true" : "false");
+      b.setAttribute("aria-label", (t.done ? "Mark as not done: " : "Mark as done: ") + t.text);
+      b.addEventListener("click", function () { t.done = !t.done; t.doneAt = t.done ? dayKey() : null; save(); renderAll(); });
+      var sp = el("span", "txt"); sp.textContent = t.text;
+      var x = el("button", "del"); x.type = "button"; x.textContent = "×";
+      x.setAttribute("aria-label", "Delete task: " + t.text);
+      x.addEventListener("click", function () { state.tasks = state.tasks.filter(function (k) { return k.id !== t.id; }); save(); renderAll(); });
+      li.appendChild(b); li.appendChild(sp); li.appendChild(x);
+      ul.appendChild(li);
+    });
+    $("taskEmpty").hidden = state.tasks.length > 0;
+    $("clearDone").hidden = done.length === 0;
+  }
+
+  function renderStats() {
+    var today = dayKey();
+    var doneToday = state.tasks.filter(function (t) { return t.done && t.doneAt === today; }).length;
+    var openN = state.tasks.filter(function (t) { return !t.done; }).length;
+    var hDone = state.habits.filter(function (h) { return h.days && h.days[today]; }).length;
+    var f = state.focus[today] || { n: 0, min: 0 };
+    var box = $("stats");
+    box.textContent = "";
+    [[doneToday + "/" + (doneToday + openN), "tasks done"], [hDone + "/" + state.habits.length, "habits done"], [f.min + " min", "focused"]].forEach(function (p) {
+      var d = el("div", "stat"); var b = el("b"); b.textContent = p[0]; var s = el("span"); s.textContent = p[1];
+      d.appendChild(b); d.appendChild(s); box.appendChild(d);
+    });
+  }
+
+  $("taskForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("taskInput").value.trim();
+    if (!v) return;
+    state.tasks.push({ id: uid(), text: v, done: false, doneAt: null });
+    $("taskInput").value = "";
+    save(); renderAll();
+  });
+  $("clearDone").addEventListener("click", function () {
+    state.tasks = state.tasks.filter(function (t) { return !t.done; });
+    save(); renderAll();
+  });
+
+  /* ---------- Habits ---------- */
+  function streak(h) {
+    var n = 0, i = h.days[dayKey()] ? 0 : 1;
+    for (; i < 400; i++) { if (h.days[daysAgo(i)]) n++; else break; }
+    return n;
+  }
+  function renderHabits() {
+    var ul = $("habitList");
+    ul.textContent = "";
+    state.habits.forEach(function (h) {
+      h.days = h.days || {};
+      var today = dayKey();
+      var li = el("li", "item habit" + (h.days[today] ? " done" : ""));
+      var b = el("button", "check");
+      b.type = "button";
+      b.setAttribute("aria-pressed", h.days[today] ? "true" : "false");
+      b.setAttribute("aria-label", (h.days[today] ? "Undo today: " : "Done today: ") + h.name);
+      b.addEventListener("click", function () { if (h.days[today]) delete h.days[today]; else h.days[today] = 1; save(); renderAll(); });
+      var mid = el("div", "mid");
+      var nm = el("span", "name"); nm.textContent = h.name;
+      var dots = el("div", "dots"); dots.setAttribute("aria-hidden", "true");
+      for (var i = 6; i >= 0; i--) {
+        var d = el("i", (h.days[daysAgo(i)] ? "on" : "") + (i === 0 ? " today" : ""));
+        dots.appendChild(d);
+      }
+      mid.appendChild(nm); mid.appendChild(dots);
+      var right = el("div", "right");
+      var s = streak(h);
+      if (s > 0) { var st = el("span", "streak"); st.textContent = s + (s === 1 ? " day" : " days"); right.appendChild(st); }
+      var x = el("button", "del"); x.type = "button"; x.textContent = "×";
+      x.setAttribute("aria-label", "Delete habit: " + h.name);
+      x.addEventListener("click", function () { state.habits = state.habits.filter(function (k) { return k.id !== h.id; }); save(); renderAll(); });
+      right.appendChild(x);
+      li.appendChild(b); li.appendChild(mid); li.appendChild(right);
+      ul.appendChild(li);
+    });
+    $("habitEmpty").hidden = state.habits.length > 0;
+  }
+  $("habitForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("habitInput").value.trim();
+    if (!v) return;
+    state.habits.push({ id: uid(), name: v, days: {} });
+    $("habitInput").value = "";
+    save(); renderAll();
+  });
+
+  /* ---------- Focus timer ---------- */
+  var tm = state.timer || { mode: "focus", running: false, endsAt: 0, remaining: DUR.focus * 60000 };
+  var tick = null, wl = null;
+  function left() { return tm.running ? Math.max(0, tm.endsAt - Date.now()) : tm.remaining; }
+  function persistTimer() { state.timer = tm; save(); }
+  function stopTick() { if (tick) { clearInterval(tick); tick = null; } }
+  function startTick() { stopTick(); tick = setInterval(onTick, 250); }
+  function lockScreen() { try { if (navigator.wakeLock) navigator.wakeLock.request("screen").then(function (l) { wl = l; }).catch(function () {}); } catch (e) {} }
+  function unlock() { try { if (wl) { wl.release(); wl = null; } } catch (e) {} }
+  function setMode(m) {
+    stopTick(); unlock();
+    tm = { mode: m, running: false, endsAt: 0, remaining: DUR[m] * 60000 };
+    persistTimer(); renderFocus();
+  }
+  function start() {
+    if (tm.running) return;
+    tm.running = true; tm.endsAt = Date.now() + tm.remaining;
+    $("focusMsg").textContent = "";
+    persistTimer(); startTick(); lockScreen(); renderFocus();
+  }
+  function pause() {
+    if (!tm.running) return;
+    tm.remaining = left(); tm.running = false;
+    stopTick(); unlock(); persistTimer(); renderFocus();
+  }
+  function beep() {
+    try {
+      var C = window.AudioContext || window.webkitAudioContext;
+      if (!C) return;
+      var ctx = new C();
+      [0, 0.35, 0.7].forEach(function (t) {
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.15, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.3);
+      });
+    } catch (e) {}
+  }
+  function finish() {
+    var wasFocus = tm.mode === "focus";
+    stopTick(); unlock();
+    var next = "focus", msg = "Break over. Ready for the next focus session?";
+    if (wasFocus) {
+      var k = dayKey();
+      var f = state.focus[k] || { n: 0, min: 0 };
+      f.n += 1; f.min += DUR.focus; state.focus[k] = f;
+      next = f.n % 4 === 0 ? "long" : "short";
+      msg = "Focus session done. Take a break.";
+    }
+    tm = { mode: next, running: false, endsAt: 0, remaining: DUR[next] * 60000 };
+    persistTimer();
+    beep();
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+    renderAll();
+    $("focusMsg").textContent = msg;
+  }
+  function onTick() { if (left() <= 0) finish(); else drawClock(); }
+  function drawClock() {
+    var ms = left(), sec = Math.ceil(ms / 1000);
+    var txt = pad(Math.floor(sec / 60)) + ":" + pad(sec % 60);
+    $("clock").textContent = txt;
+    $("prog").setAttribute("stroke-dasharray", CIRC.toFixed(2));
+    $("prog").setAttribute("stroke-dashoffset", (CIRC * (1 - ms / (DUR[tm.mode] * 60000))).toFixed(2));
+    document.title = tm.running ? txt + " DoneDay" : "DoneDay";
+  }
+  function renderFocus() {
+    document.querySelectorAll(".mode").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.mode === tm.mode ? "true" : "false"); });
+    $("clockLabel").textContent = LABEL[tm.mode];
+    $("startBtn").textContent = tm.running ? "Pause" : (tm.remaining < DUR[tm.mode] * 60000 ? "Resume" : "Start");
+    var f = state.focus[dayKey()] || { n: 0, min: 0 };
+    $("todayFocus").textContent = "Today: " + f.n + (f.n === 1 ? " session, " : " sessions, ") + f.min + " minutes focused";
+    drawClock();
+  }
+  document.querySelectorAll(".mode").forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
+  $("startBtn").addEventListener("click", function () { if (tm.running) pause(); else start(); });
+  $("resetBtn").addEventListener("click", function () { $("focusMsg").textContent = ""; setMode(tm.mode); });
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") {
+      if (tm.running && left() <= 0) finish(); else { drawClock(); if (tm.running) lockScreen(); }
+    }
+  });
+
+  /* ---------- Backup ---------- */
+  function say(t) { $("dataMsg").textContent = t; }
+  $("exportBtn").addEventListener("click", function () {
+    try {
+      var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "doneday-backup-" + dayKey() + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+      say("Backup saved to your downloads.");
+    } catch (e) { say("Could not save the backup on this device."); }
+  });
+  $("importFile").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        var data = JSON.parse(String(r.result));
+        if (!data || typeof data !== "object" || !Array.isArray(data.tasks) || !Array.isArray(data.habits)) throw new Error("bad");
+        state = norm(data);
+        tm = state.timer || { mode: "focus", running: false, endsAt: 0, remaining: DUR.focus * 60000 };
+        stopTick(); if (tm.running) startTick();
+        save(); renderAll();
+        say("Backup loaded.");
+      } catch (err) { say("This file is not a DoneDay backup."); }
+    };
+    r.readAsText(f);
+    e.target.value = "";
+  });
+  $("importLabel").addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("importFile").click(); } });
+  var wipeArmed = false, wipeTimer = null;
+  function disarm() { wipeArmed = false; $("wipeBtn").textContent = "Delete all data"; $("wipeBtn").classList.remove("armed"); }
+  $("wipeBtn").addEventListener("click", function () {
+    if (!wipeArmed) {
+      wipeArmed = true; $("wipeBtn").textContent = "Tap again to delete everything"; $("wipeBtn").classList.add("armed");
+      wipeTimer = setTimeout(disarm, 4000); return;
+    }
+    clearTimeout(wipeTimer); disarm();
+    stopTick(); unlock();
+    state = norm({});
+    tm = { mode: "focus", running: false, endsAt: 0, remaining: DUR.focus * 60000 };
+    save(); renderAll(); say("All data deleted.");
+  });
+
+  /* ---------- Tabs and start-up ---------- */
+  function show(v) {
+    ["today", "habits", "focus", "data"].forEach(function (k) { $("view-" + k).hidden = k !== v; });
+    document.querySelectorAll(".tab").forEach(function (t) {
+      if (t.dataset.view === v) t.setAttribute("aria-current", "page"); else t.removeAttribute("aria-current");
+    });
+    $("viewTitle").textContent = TITLES[v];
+    try { sessionStorage.setItem("doneday-view", v); } catch (e) {}
+  }
+  document.querySelectorAll(".tab").forEach(function (t) { t.addEventListener("click", function () { show(t.dataset.view); window.scrollTo(0, 0); }); });
+
+  function renderAll() { renderStats(); renderTasks(); renderHabits(); renderFocus(); }
+
+  $("dateLine").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  renderAll();
+  var first = "today";
+  try { var sv = sessionStorage.getItem("doneday-view"); if (sv && TITLES[sv]) first = sv; } catch (e) {}
+  show(first);
+  if (tm.running) { if (left() <= 0) finish(); else startTick(); }
+
+  if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+  }
+})();
+</script>
+</body>
+</html>
